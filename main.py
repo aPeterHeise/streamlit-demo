@@ -6,18 +6,24 @@ import snowflake.connector
 # In real life, we’d use @st.cache or @st.experimental_memo to add caching
 conn = snowflake.connector.connect(**st.secrets["snowflake"])
 
-# Get a list of available counties from the State of California Covid Dataset
-# Data set is available free here: https://app.snowflake.com/marketplace/listing/GZ1MBZAUJF
-# More info on the data set: https://www.snowflake.com/datasets/state-of-california-california-covid-19-datasets/ 
-counties = pd.read_sql("SELECT distinct area from open_data.vw_cases ORDER BY area asc;", conn)
+# Get a list of available counties.
+counties = pd.read_sql("SELECT distinct N_NAME from NATION order by N_NAME;", conn)
 
 # Ask the user to select a county
 option = st.selectbox('Select an area:', counties)
 
-# Query the data set to get the case counts for the last 30 days for the chosen county
-cases = pd.read_sql(f"SELECT date day, SUM(cases) CASES FROM open_data.vw_cases WHERE date > dateadd('days', -30, current_date()) AND area = %(option)s GROUP BY day ORDER BY day asc;", conn, params={"option":option})
-cases = cases.set_index(['DAY'])
+# Query the data set to get the order counts
+cases = pd.read_sql(f"""
+    SELECT O.O_ORDERDATE, count(1) as NUM_ORDERS
+    FROM CUSTOMER
+    JOIN NATION on NATION.N_NATIONKEY=CUSTOMER.C_NATIONKEY
+    JOIN "ORDERS" O on O.O_CUSTKEY=CUSTOMER.C_CUSTKEY
+    WHERE NATION.N_NAME='{option}'
+    GROUP BY O.O_ORDERDATE
+    ORDER BY O.O_ORDERDATE;
+    """, conn, params={"option":option})
+cases = cases.set_index(['O_ORDERDATE'])
 
 # Render a line chart showing the cases
-f"Daily Cases in {option} over the last 30 days"
+f"Daily Orders in {option}."
 st.line_chart(cases)
